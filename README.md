@@ -121,6 +121,10 @@ everwhen is a faithful TypeScript port of the [`recpyx`](https://github.com/coal
 library. Its full engine + robustness test matrix (English, French, timezones, calendar edge cases)
 is ported to vitest and passes identically — that parity is the definition of "done".
 
+## Changelog
+
+See [CHANGELOG.md](./CHANGELOG.md).
+
 ## License
 
 [MIT](./LICENSE)
