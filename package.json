@@ -4,7 +4,7 @@
   "description": "Parse natural-language recurrence rules (English + French) and compute their occurrences.",
   "type": "module",
   "license": "MIT",
-  "author": "coality",
+  "author": "Jérôme Collette",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/coality/everwhen.git"
