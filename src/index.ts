@@ -20,6 +20,7 @@ export type {
   IRDate,
   IRDateTime,
   IRExcept,
+  IRSetposWeekday,
   IRHolidaySpec,
   IRWindowDate,
   IRBetweenTime,

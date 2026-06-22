@@ -135,16 +135,49 @@ export function parseSchedule(text: string, defaultTz = "Europe/Paris") {
 export function parseRule(text: string): IRRule {
   let sLower = collapse(text).toLowerCase();
 
+  // "every other X" -> biweekly. Normalize into the existing grammar.
+  sLower = sLower
+    .replace(
+      /^every\s+other\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/,
+      "every 2 weeks on $1",
+    )
+    .replace(/^every\s+other\s+day\b/, "every 2 days")
+    .replace(/^every\s+other\s+week\s+on\b/, "every 2 weeks on")
+    .replace(/^every\s+other\s+week\b/, "every 2 weeks");
+
   let weekendShift: IRRule["weekend_shift"] = "none";
   const window: IRWindowDate = makeWindowDate();
   const ex: IRExcept = makeExcept();
 
   const applyExcept = (exTextRaw: string): void => {
-    const exText = exTextRaw.trim().toLowerCase();
+    let exText = exTextRaw.trim().toLowerCase();
 
     if (exText === "on public holidays" || exText === "public holidays") {
       ex.holidays.enabled = true;
       return;
+    }
+
+    // nth-weekday-of-month exclusions: "the last tuesday of the month",
+    // "the first monday of the month". Extract and strip so the weekday isn't
+    // also picked up as a plain excluded weekday.
+    exText = exText.replace(
+      /(?:the\s+)?(first|second|third|fourth|fifth|last)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+of\s+(?:the\s+)?month/g,
+      (_m, ord: string, wd: string) => {
+        const pos = ORDINAL[ord]!;
+        const weekday = WEEKDAY_MAP[wd]!;
+        if (!ex.setpos_weekdays.some((s) => s.pos === pos && s.weekday === weekday)) {
+          ex.setpos_weekdays.push({ pos, weekday });
+        }
+        return " ";
+      },
+    );
+
+    // weekend / weekday set exclusions: "except weekends", "except weekdays".
+    if (/\bweekends?\b/.test(exText)) {
+      for (const idx of [5, 6]) if (!ex.weekdays.includes(idx)) ex.weekdays.push(idx);
+    }
+    if (/\bweekdays?\b/.test(exText)) {
+      for (const idx of [0, 1, 2, 3, 4]) if (!ex.weekdays.includes(idx)) ex.weekdays.push(idx);
     }
 
     for (const w of parseWeekdayList(exText)) {
@@ -482,19 +515,24 @@ export function parseRule(text: string): IRRule {
           times: [at],
         });
       } else {
+        // One or more ordinals followed by a single weekday:
+        // "first monday", "first and third monday", "second and fourth tuesday".
         const m2 =
-          /^(first|second|third|fourth|fifth|last)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/.exec(
+          /^((?:first|second|third|fourth|fifth|last)(?:[\s,]+(?:and\s+)?(?:first|second|third|fourth|fifth|last))*)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/.exec(
             onPart,
           );
         if (!m2) throw new Error(`Unsupported rule: '${text}'`);
-        const pos = ORDINAL[m2[1]!]!;
+        const positions = m2[1]!
+          .split(/[\s,]+/)
+          .filter((tok) => tok && tok !== "and")
+          .map((tok) => ORDINAL[tok]!);
         const wd = WEEKDAY_MAP[m2[2]!]!;
         r = makeRule({
           type: "rrule",
           freq: "monthly",
           interval: 1,
           byweekday: [wd],
-          bysetpos: [pos],
+          bysetpos: positions,
           times: [at],
         });
       }

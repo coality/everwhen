@@ -38,11 +38,21 @@ export interface IRHolidaySpec {
   country: string | null;
 }
 
+/** An nth-weekday-of-month selector, e.g. {pos:-1, weekday:1} = "last Tuesday". */
+export interface IRSetposWeekday {
+  /** 1..5, or -1 for "last". */
+  pos: number;
+  /** Monday=0 .. Sunday=6. */
+  weekday: number;
+}
+
 export interface IRExcept {
   /** Excluded weekdays, Monday=0 .. Sunday=6. */
   weekdays: number[];
   /** Excluded calendar dates. */
   dates: IRDate[];
+  /** Excluded nth-weekday-of-month occurrences, e.g. "the last Tuesday of the month". */
+  setpos_weekdays: IRSetposWeekday[];
   holidays: IRHolidaySpec;
 }
 
@@ -103,7 +113,7 @@ export function makeHolidaySpec(): IRHolidaySpec {
 }
 
 export function makeExcept(): IRExcept {
-  return { weekdays: [], dates: [], holidays: makeHolidaySpec() };
+  return { weekdays: [], dates: [], setpos_weekdays: [], holidays: makeHolidaySpec() };
 }
 
 export function makeWindowDate(fields: Partial<IRWindowDate> = {}): IRWindowDate {

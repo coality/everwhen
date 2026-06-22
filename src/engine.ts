@@ -17,7 +17,7 @@ import {
   InvalidRuleError,
   NoOccurrenceError,
 } from "./types.js";
-import { WallTime } from "./walltime.js";
+import { WallTime, lastDayOfMonth } from "./walltime.js";
 import { RRule, RRuleSet } from "./rrule.js";
 import { parseSchedule } from "./parser.js";
 
@@ -119,6 +119,20 @@ function minutesOfDay(hour: number, minute: number): number {
   return hour * 60 + minute;
 }
 
+/** True if `dt` matches an excluded nth-weekday-of-month (e.g. "last Tuesday"). */
+function isExcludedSetpos(dt: WallTime, rule: IRRule): boolean {
+  for (const sw of rule.except_.setpos_weekdays) {
+    if (dt.weekday !== sw.weekday) continue;
+    if (sw.pos === -1) {
+      if (dt.day + 7 > lastDayOfMonth(dt.year, dt.month)) return true;
+    } else {
+      const nth = Math.floor((dt.day - 1) / 7) + 1;
+      if (nth === sw.pos) return true;
+    }
+  }
+  return false;
+}
+
 function excluded(dt: WallTime, rule: IRRule): boolean {
   // hourly filter window (HOURLY + between_time only)
   if (rule.type === "rrule" && rule.freq === "hourly" && rule.between_time && rule.step === null) {
@@ -133,6 +147,7 @@ function excluded(dt: WallTime, rule: IRRule): boolean {
     rule.except_.dates.some((d) => d.year === dt.year && d.month === dt.month && d.day === dt.day)
   )
     return true;
+  if (isExcludedSetpos(dt, rule)) return true;
 
   if (rule.except_.holidays.enabled) {
     throw new Error("Public holidays exclusion not implemented (plug holidays here).");
@@ -365,6 +380,11 @@ export function validate(text: string, options: OccurrenceOptions = {}): true {
         r.except_.dates.some((d) => d.year === dt.year && d.month === dt.month && d.day === dt.day)
       ) {
         throw new InvalidRuleError(`One-shot excluded by date exception for rule '${text}'`);
+      }
+      if (isExcludedSetpos(dt, r)) {
+        throw new InvalidRuleError(
+          `One-shot excluded by month-position exception for rule '${text}'`,
+        );
       }
       if (wStart && dt.isBefore(wStart)) {
         throw new InvalidRuleError(`One-shot before window start for rule '${text}'`);

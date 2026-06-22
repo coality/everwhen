@@ -87,6 +87,13 @@ function wdFrToEn(s: string): string {
   return out;
 }
 
+/** Map a single French weekday (singular or plural) to its English name. */
+function frWeekdayToEn(wd: string): string {
+  const w = wd.toLowerCase();
+  for (const [fr, eng] of WD_FR_TO_EN) if (fr === w) return eng;
+  return wd;
+}
+
 export function frToEnRule(frRule: string): string {
   let s = normSpaces(frRule);
 
@@ -135,9 +142,23 @@ export function frToEnRule(frRule: string): string {
   s = s.replace(/,\s*(if\s+weekend\s+then\s+next\s+(?:monday|business\s+day))\b/gi, " $1");
   s = s.replace(/,\s*$/, "");
 
+  // "le week-end" / "les week-ends" -> "weekends" (the "sauf le week-end"
+  // exclusion). Requires the le/les article so it never rewrites the
+  // "if weekend then ..." produced by the weekend-shift rules above.
+  s = s.replace(/\b(?:le|les)\s+week-?ends?\b/gi, "weekends");
+
+  // biweekly: "un mardi sur deux" -> "every 2 weeks on tuesday" (weekday is
+  // converted to English further down, so match the FR weekday here).
+  s = s.replace(
+    /\bun\s+(lundis?|mardis?|mercredis?|jeudis?|vendredis?|samedis?|dimanches?)\s+sur\s+deux\b/gi,
+    (_m, wd: string) => `every 2 weeks on ${frWeekdayToEn(wd)}`,
+  );
+
   // frequency base phrases
   s = s.replace(/\b(tous|toutes)\s+les\b/gi, "every");
   s = s.replace(/\bchaque\b/gi, "every");
+  // biweekly via the French word "deux": "tous les deux jours" -> "every 2 days"
+  s = s.replace(/\bevery\s+deux\b/gi, "every 2");
   s = s.replace(/\bjour\s+ouvr[eé]s\b/gi, "weekday");
   s = s.replace(/\bjours\s+ouvr[eé]s\b/gi, "weekday");
   s = s.replace(/\bjours\b/gi, "days");
@@ -206,6 +227,13 @@ export function frToEnRule(frRule: string): string {
 
   // "sauf" -> "except"
   s = s.replace(/\bsauf\b/gi, "except");
+
+  // nth weekday of month exclusion: "le dernier mardi du mois" became
+  // "le last tuesday du month" above -> "the last tuesday of the month".
+  s = s.replace(
+    /\b(?:le\s+)?(first|second|third|fourth|fifth|last)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+du\s+month\b/gi,
+    "the $1 $2 of the month",
+  );
 
   // normalize commas
   s = s.replace(/\s*,\s*/g, ", ");
