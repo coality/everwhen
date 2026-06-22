@@ -46,6 +46,12 @@ export interface IRSetposWeekday {
   weekday: number;
 }
 
+/** An inclusive excluded date range. */
+export interface IRDateRange {
+  start: IRDate;
+  end: IRDate;
+}
+
 export interface IRExcept {
   /** Excluded weekdays, Monday=0 .. Sunday=6. */
   weekdays: number[];
@@ -53,6 +59,12 @@ export interface IRExcept {
   dates: IRDate[];
   /** Excluded nth-weekday-of-month occurrences, e.g. "the last Tuesday of the month". */
   setpos_weekdays: IRSetposWeekday[];
+  /** Excluded calendar months, 1..12 (e.g. "except in august"). */
+  months: number[];
+  /** Excluded days-of-month, 1..31 (e.g. "except the 15th"). */
+  monthdays: number[];
+  /** Excluded inclusive date ranges (e.g. "except between … and …"). */
+  date_ranges: IRDateRange[];
   holidays: IRHolidaySpec;
 }
 
@@ -96,6 +108,9 @@ export interface IRRule {
   window_date: IRWindowDate | null;
   except_: IRExcept;
   weekend_shift: WeekendShift;
+  /** Repetition limit: stop after this many occurrences from the series start
+   *  (window start, else the engine anchor). `null` = unlimited. */
+  count: number | null;
 }
 
 export interface IRSchedule {
@@ -113,7 +128,15 @@ export function makeHolidaySpec(): IRHolidaySpec {
 }
 
 export function makeExcept(): IRExcept {
-  return { weekdays: [], dates: [], setpos_weekdays: [], holidays: makeHolidaySpec() };
+  return {
+    weekdays: [],
+    dates: [],
+    setpos_weekdays: [],
+    months: [],
+    monthdays: [],
+    date_ranges: [],
+    holidays: makeHolidaySpec(),
+  };
 }
 
 export function makeWindowDate(fields: Partial<IRWindowDate> = {}): IRWindowDate {
@@ -135,6 +158,7 @@ export function makeRule(fields: Partial<IRRule> & { type: RuleType }): IRRule {
     window_date: null,
     except_: makeExcept(),
     weekend_shift: "none",
+    count: null,
     ...fields,
   };
 }

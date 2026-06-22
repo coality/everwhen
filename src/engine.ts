@@ -119,6 +119,23 @@ function minutesOfDay(hour: number, minute: number): number {
   return hour * 60 + minute;
 }
 
+/** Ordinal key for a calendar date, for cheap comparisons. */
+function dayKey(year: number, month: number, day: number): number {
+  return year * 10000 + month * 100 + day;
+}
+
+/** True if `dt`'s calendar date is within [start, end] inclusive. */
+function dateInRange(
+  dt: WallTime,
+  start: { year: number; month: number; day: number },
+  end: { year: number; month: number; day: number },
+): boolean {
+  const k = dayKey(dt.year, dt.month, dt.day);
+  return (
+    k >= dayKey(start.year, start.month, start.day) && k <= dayKey(end.year, end.month, end.day)
+  );
+}
+
 /** True if `dt` matches an excluded nth-weekday-of-month (e.g. "last Tuesday"). */
 function isExcludedSetpos(dt: WallTime, rule: IRRule): boolean {
   for (const sw of rule.except_.setpos_weekdays) {
@@ -148,6 +165,9 @@ function excluded(dt: WallTime, rule: IRRule): boolean {
   )
     return true;
   if (isExcludedSetpos(dt, rule)) return true;
+  if (rule.except_.months.includes(dt.month)) return true;
+  if (rule.except_.monthdays.includes(dt.day)) return true;
+  if (rule.except_.date_ranges.some((r) => dateInRange(dt, r.start, r.end))) return true;
 
   if (rule.except_.holidays.enabled) {
     throw new Error("Public holidays exclusion not implemented (plug holidays here).");
@@ -276,6 +296,23 @@ function nextOccurrenceWall(text: string, now: WallTime, defaultTz: string): Wal
 
     const rs = buildRruleset(r, now, wStart);
 
+    // Repetition limit: the count-th occurrence from the series start caps the
+    // effective window end (count applies to plain rrule rules, not step rules).
+    let effectiveEnd = wEnd;
+    if (r.count !== null && !(r.step && r.between_time)) {
+      let cp = (wStart ?? now).replace({ second: 0 }).plusSeconds(-1);
+      let cutoff: WallTime | null = null;
+      for (let k = 0; k < r.count; k++) {
+        const o = rs.after(cp, false);
+        if (o === null) break;
+        cutoff = o;
+        cp = o;
+      }
+      if (cutoff !== null) {
+        effectiveEnd = effectiveEnd && effectiveEnd.isBefore(cutoff) ? effectiveEnd : cutoff;
+      }
+    }
+
     let probe = now;
     let found = false;
     for (let i = 0; i < 500; i++) {
@@ -310,7 +347,7 @@ function nextOccurrenceWall(text: string, now: WallTime, defaultTz: string): Wal
         probe = wStart.plusSeconds(-1);
         continue;
       }
-      if (wEnd && dt.isAfter(wEnd)) break;
+      if (effectiveEnd && dt.isAfter(effectiveEnd)) break;
 
       if (excluded(dt, r)) {
         probe = dt.plusSeconds(1);
@@ -351,6 +388,34 @@ export function nextOccurrence(text: string, options: OccurrenceOptions = {}): D
 }
 
 /**
+ * Return up to `options.count` upcoming occurrences (default 10), each strictly
+ * after the previous one. Stops early when the rule is exhausted (e.g. a window
+ * ended or a repetition limit was reached).
+ */
+export function occurrences(
+  text: string,
+  options: OccurrenceOptions & { count?: number } = {},
+): Date[] {
+  const max = Math.max(0, Math.min(options.count ?? 10, 1000));
+  const defaultTz = options.tz ?? DEFAULT_TZ;
+  const zone = parseSchedule(text, defaultTz).tz;
+  let cursor = nowToWall(options.now, zone);
+  const out: Date[] = [];
+  for (let i = 0; i < max; i++) {
+    let dt: WallTime;
+    try {
+      dt = nextOccurrenceWall(text, cursor, defaultTz);
+    } catch (exc) {
+      if (exc instanceof NoOccurrenceError) break;
+      throw exc;
+    }
+    out.push(wallToDate(dt, zone));
+    cursor = dt;
+  }
+  return out;
+}
+
+/**
  * Validate that a rule is well-formed and has at least one occurrence within a
  * reasonable horizon. Returns `true` on success; throws {@link InvalidRuleError}
  * otherwise.
@@ -385,6 +450,13 @@ export function validate(text: string, options: OccurrenceOptions = {}): true {
         throw new InvalidRuleError(
           `One-shot excluded by month-position exception for rule '${text}'`,
         );
+      }
+      if (
+        r.except_.months.includes(dt.month) ||
+        r.except_.monthdays.includes(dt.day) ||
+        r.except_.date_ranges.some((rg) => dateInRange(dt, rg.start, rg.end))
+      ) {
+        throw new InvalidRuleError(`One-shot excluded by an exception for rule '${text}'`);
       }
       if (wStart && dt.isBefore(wStart)) {
         throw new InvalidRuleError(`One-shot before window start for rule '${text}'`);

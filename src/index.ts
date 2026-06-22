@@ -2,7 +2,7 @@
  * everwhen — parse natural-language recurrence rules (English + French) and
  * compute their occurrences.
  */
-export { nextOccurrence, validate } from "./engine.js";
+export { nextOccurrence, occurrences, validate } from "./engine.js";
 export type { OccurrenceOptions } from "./engine.js";
 
 export { parseSchedule, parseRule, detectLanguage } from "./parser.js";
@@ -21,6 +21,7 @@ export type {
   IRDateTime,
   IRExcept,
   IRSetposWeekday,
+  IRDateRange,
   IRHolidaySpec,
   IRWindowDate,
   IRBetweenTime,

@@ -1,6 +1,6 @@
 {
   "name": "everwhen",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Parse natural-language recurrence rules (English + French) and compute their occurrences.",
   "type": "module",
   "license": "MIT",

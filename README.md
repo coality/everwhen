@@ -43,6 +43,12 @@ Returns the next occurrence **strictly after** `now`.
 Throws `InvalidRuleError` for empty / unsupported / structurally-invalid rules, and
 `NoOccurrenceError` when a well-formed rule has no future occurrence (e.g. its window has passed).
 
+### `occurrences(text, options?) => Date[]`
+
+Returns up to `options.count` upcoming occurrences (default 10), each strictly after the previous.
+Stops early when the rule is exhausted (window ended or repetition limit reached). Same `now` / `tz`
+options as `nextOccurrence`.
+
 ### `validate(text, options?) => true`
 
 Returns `true` when the rule is well-formed and has an occurrence within a ~1-year horizon;
@@ -61,30 +67,36 @@ All IR types (`IRSchedule`, `IRRule`, …) and the error classes are exported.
 
 The same rules work in English and French; the formatters and parser accept either.
 
-| Kind            | English                                                                             | French                                                                                |
-| --------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Daily           | `every day at 10:00`                                                                | `tous les jours à 10h00`                                                              |
-| Multiple times  | `every day at 09:00 and 18:00`                                                      | `tous les jours à 09h00 et 18h00`                                                     |
-| Weekday set     | `every monday and thursday at 18:00`                                                | `tous les lundis et jeudis à 18h00`                                                   |
-| Business days   | `every weekday at 09:00`                                                            | `tous les jours ouvrés à 09h00`                                                       |
-| Interval        | `every 2 days at 10:00`, `every 3 weeks on monday at 08:30`                         | `tous les 2 jours à 10h00`, `toutes les 3 semaines le lundi à 08h30`                  |
-| Sub-day step    | `every day every 2 hours between 09:00 and 17:00`                                   | `tous les jours, toutes les 2 heures entre 09h00 et 17h00`                            |
-| Hourly window   | `every hour between 18:00 and 23:00`                                                | `toutes les heures entre 18h00 et 23h00`                                              |
-| Minutely/hourly | `every 15 minutes`, `every 6 hours`                                                 | `toutes les 15 minutes`, `toutes les 6 heures`                                        |
-| Day of month    | `every month on the 15th at 08:00`, `… on the last day …`                           | `tous les mois le 15 à 08h00`, `… le dernier jour …`                                  |
-| Nth weekday     | `every month on the first monday at 09:00`, `… on the first and third monday …`     | `tous les mois le premier lundi à 09h00`, `… le premier et troisième lundi …`         |
-| Biweekly        | `every other tuesday at 09:00`, `every other day at 10:00`                          | `un mardi sur deux à 09h00`, `tous les deux jours à 10h00`                            |
-| Yearly          | `every year on 03-14 at 10:00`, `every year on the last sunday of october at 23:00` | `tous les ans le 03-14 à 10h00`, `tous les ans le dernier dimanche d'octobre à 23h00` |
-| One-shot        | `2026-03-13 at 02:00`                                                               | `le 2026-03-13 à 02h00`                                                               |
-| Date window     | `… between 2026-02-01 and 2026-03-31`, `… until 2026-12-31`                         | `… entre le 2026-02-01 et le 2026-03-31`, `… jusqu'au 2026-12-31`                     |
-| Exceptions      | `… except thursday`, `… except 2026-03-13`, `… except weekends`                     | `… sauf le jeudi`, `… sauf le 2026-03-13`, `… sauf le week-end`                       |
-| Except nth wday | `… except the last tuesday of the month`                                            | `… sauf le dernier mardi du mois`                                                     |
-| Weekend shift   | `… if weekend then next monday` / `… next business day`                             | `… si week-end alors lundi suivant` / `… prochain jour ouvré`                         |
-| Composed        | `rule A, and rule B` (earliest wins)                                                | `règle A, et règle B`                                                                 |
+| Kind            | English                                                                                                                                | French                                                                                                                                 |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Daily           | `every day at 10:00`                                                                                                                   | `tous les jours à 10h00`                                                                                                               |
+| Multiple times  | `every day at 09:00 and 18:00`                                                                                                         | `tous les jours à 09h00 et 18h00`                                                                                                      |
+| Weekday set     | `every monday and thursday at 18:00`                                                                                                   | `tous les lundis et jeudis à 18h00`                                                                                                    |
+| Business days   | `every weekday at 09:00`                                                                                                               | `tous les jours ouvrés à 09h00`                                                                                                        |
+| Interval        | `every 2 days at 10:00`, `every 3 weeks on monday at 08:30`                                                                            | `tous les 2 jours à 10h00`, `toutes les 3 semaines le lundi à 08h30`                                                                   |
+| Long interval   | `every 2 months on the 1st …`, `every quarter …`, `every 2 years on 03-14 …`                                                           | `tous les 2 mois le 1er …`, `tous les trimestres …`, `un mois sur deux …`                                                              |
+| Sub-day step    | `every day every 2 hours between 09:00 and 17:00`                                                                                      | `tous les jours, toutes les 2 heures entre 09h00 et 17h00`                                                                             |
+| Hourly window   | `every hour between 18:00 and 23:00`, `… from 09:00 to 17:00`                                                                          | `toutes les heures entre 18h00 et 23h00`, `… de 09h00 à 17h00`                                                                         |
+| Minutely/hourly | `every 15 minutes`, `every 6 hours`                                                                                                    | `toutes les 15 minutes`, `toutes les 6 heures`                                                                                         |
+| Weekend         | `every weekend at 10:00`                                                                                                               | `tous les week-ends à 10h00`                                                                                                           |
+| Weekday range   | `every monday to friday at 09:00`                                                                                                      | `du lundi au vendredi à 09h00`                                                                                                         |
+| Day of month    | `every month on the 15th at 08:00`, `… on the last day …`                                                                              | `tous les mois le 15 à 08h00`, `… le dernier jour …`                                                                                   |
+| Business day    | `every month on the last/first weekday at 18:00`                                                                                       | `le dernier/premier jour ouvré du mois à 18h00`                                                                                        |
+| Nth weekday     | `every month on the first monday at 09:00`, `… on the first and third monday …`                                                        | `tous les mois le premier lundi à 09h00`, `… le premier et troisième lundi …`                                                          |
+| Biweekly        | `every other tuesday …`, `every fortnight …`                                                                                           | `un mardi sur deux …`, `tous les quinze jours …`                                                                                       |
+| Yearly          | `every year on 03-14 at 10:00`, `every year on the last sunday of october at 23:00`                                                    | `tous les ans le 03-14 à 10h00`, `tous les ans le dernier dimanche d'octobre à 23h00`                                                  |
+| Time words      | `at noon`, `at midnight`                                                                                                               | `à midi`, `à minuit`                                                                                                                   |
+| One-shot        | `2026-03-13 at 02:00`                                                                                                                  | `le 2026-03-13 à 02h00`                                                                                                                |
+| Date window     | `… between 2026-02-01 and 2026-03-31`, `… until 2026-12-31`, `… starting 2026-04-01`                                                   | `… entre le … et le …`, `… jusqu'au …`, `… à partir du 2026-04-01`                                                                     |
+| Repetition cap  | `… 5 times` (pairs well with `starting …`)                                                                                             | `… 5 fois`                                                                                                                             |
+| Exceptions      | `… except thursday`, `… except 2026-03-13`, `… except weekends`, `… except in august`, `… except the 15th`, `… except between … and …` | `… sauf le jeudi`, `… sauf le 2026-03-13`, `… sauf le week-end`, `… sauf en août`, `… sauf le 15 du mois`, `… sauf entre le … et le …` |
+| Except nth wday | `… except the last tuesday of the month`                                                                                               | `… sauf le dernier mardi du mois`                                                                                                      |
+| Weekend shift   | `… if weekend then next monday` / `… next business day`                                                                                | `… si week-end alors lundi suivant` / `… prochain jour ouvré`                                                                          |
+| Composed        | `rule A, and rule B` (earliest wins)                                                                                                   | `règle A, et règle B`                                                                                                                  |
 
-Times accept `09:00`, `9`, `3PM` (EN) and `09h00`, `9h`, `18h30` (FR). Public-holiday exclusions
-(`except public holidays` / `sauf les jours fériés`) are recognized but rejected with a clear error,
-since there is no holiday data source.
+Times accept `09:00`, `9`, `3PM`, `noon`, `midnight` (EN) and `09h00`, `9h`, `18h30`, `midi`, `minuit`
+(FR). Public-holiday exclusions (`except public holidays` / `sauf les jours fériés`) are recognized but
+rejected with a clear error, since there is no holiday data source.
 
 ## Behaviour notes
 

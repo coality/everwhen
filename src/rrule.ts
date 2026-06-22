@@ -157,7 +157,15 @@ export class RRule {
     if (this.bysetpos && this.byweekday) {
       const matches: { year: number; month: number; day: number }[] = [];
       const lastDay = lastDayOfMonth(year, month);
+      // When bymonthday is also present, restrict the candidate days to it
+      // (resolving negatives). This is the standard "last/first business day of
+      // month" recipe: bymonthday=(-1,-2,-3), byweekday=MO..FR, bysetpos=-1.
+      const dayInScope = (day: number): boolean => {
+        if (!this.bymonthday) return true;
+        return this.bymonthday.some((md) => (md < 0 ? lastDay + md + 1 : md) === day);
+      };
       for (let day = 1; day <= lastDay; day++) {
+        if (!dayInScope(day)) continue;
         const d = WallTime.of(year, month, day);
         if (this.byweekday.includes(d.weekday)) {
           matches.push({ year, month, day });

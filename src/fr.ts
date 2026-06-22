@@ -113,6 +113,9 @@ export function frToEnRule(frRule: string): string {
     "public holidays",
   );
 
+  // "midi" / "minuit" -> 12:00 / 00:00 (before frTimeToEn / à handling)
+  s = s.replace(/\bmidi\b/gi, "12:00").replace(/\bminuit\b/gi, "00:00");
+
   s = frTimeToEn(s);
   // "à" standalone -> " a " (Unicode-aware boundary; JS \b is ASCII-only)
   s = s.replace(/(?<![^\s])à(?![^\s])/gi, " a ");
@@ -127,9 +130,14 @@ export function frToEnRule(frRule: string): string {
     /\bentre\s+le\s+(\d{4}-\d{2}-\d{2})\s+et\s+le\s+(\d{4}-\d{2}-\d{2})\b/gi,
     "between $1 and $2",
   );
-  // time range: "entre 09h00 et 17h00" (already converted to HH:MM)
+  // time range: "entre 09h00 et 17h00" / "de 09h00 à 17h00" (already HH:MM, à->a)
   s = s.replace(/\bentre\s+(\d{2}:\d{2})\s+et\s+(\d{2}:\d{2})\b/gi, "between $1 and $2");
+  s = s.replace(/\bde\s+(\d{2}:\d{2})\s+a\s+(\d{2}:\d{2})\b/gi, "between $1 and $2");
   s = s.replace(/\bjusqu'?au\s+(\d{4}-\d{2}-\d{2})\b/gi, "until $1");
+  // "à partir du 2026-04-01" -> "starting 2026-04-01" (à already lowered to "a")
+  s = s.replace(/\ba\s+partir\s+du\s+(\d{4}-\d{2}-\d{2})\b/gi, "starting $1");
+  // "5 fois" -> "5 times"
+  s = s.replace(/\b(\d+)\s+fois\b/gi, "$1 times");
 
   // weekend shift
   s = s.replace(/\bsi\s+week-?end\s+alors\s+lundi\s+suivant\b/gi, "if weekend then next monday");
@@ -142,10 +150,12 @@ export function frToEnRule(frRule: string): string {
   s = s.replace(/,\s*(if\s+weekend\s+then\s+next\s+(?:monday|business\s+day))\b/gi, " $1");
   s = s.replace(/,\s*$/, "");
 
-  // "le week-end" / "les week-ends" -> "weekends" (the "sauf le week-end"
-  // exclusion). Requires the le/les article so it never rewrites the
-  // "if weekend then ..." produced by the weekend-shift rules above.
-  s = s.replace(/\b(?:le|les)\s+week-?ends?\b/gi, "weekends");
+  // Week-end exclusion vs recurrence (kept distinct so neither touches the
+  // "if weekend then ..." produced by the weekend-shift rules above):
+  //   "sauf le week-end"     -> "except weekends"
+  //   "tous les week-ends …" -> "every weekend …"
+  s = s.replace(/\bsauf\s+(?:le|les)\s+week-?ends?\b/gi, "except weekends");
+  s = s.replace(/\b(?:tous|toutes)\s+les\s+week-?ends?\b/gi, "every weekend");
 
   // biweekly: "un mardi sur deux" -> "every 2 weeks on tuesday" (weekday is
   // converted to English further down, so match the FR weekday here).
@@ -153,12 +163,29 @@ export function frToEnRule(frRule: string): string {
     /\bun\s+(lundis?|mardis?|mercredis?|jeudis?|vendredis?|samedis?|dimanches?)\s+sur\s+deux\b/gi,
     (_m, wd: string) => `every 2 weeks on ${frWeekdayToEn(wd)}`,
   );
+  // "un mois sur deux" -> "every 2 months"; "une semaine sur deux" -> "every 2 weeks".
+  s = s.replace(/\bun\s+mois\s+sur\s+deux\b/gi, "every 2 months");
+  s = s.replace(/\bune\s+semaines?\s+sur\s+deux\b/gi, "every 2 weeks");
+
+  // "quinze jours" / "quinzaine" -> two weeks (idiomatic fortnight)
+  s = s.replace(/\bquinze\s+jours\b/gi, "2 weeks");
+  s = s.replace(/\bquinzaines?\b/gi, "2 weeks");
+
+  // "le dernier/premier jour ouvré du mois" -> "every month on the last/first weekday"
+  s = s.replace(
+    /\b(?:le\s+)?(premier|dernier)\s+jours?\s+ouvr[eé]s?\s+du\s+mois\b/gi,
+    (_m, ord: string) =>
+      `every month on the ${ord.toLowerCase() === "premier" ? "first" : "last"} weekday`,
+  );
 
   // frequency base phrases
   s = s.replace(/\b(tous|toutes)\s+les\b/gi, "every");
   s = s.replace(/\bchaque\b/gi, "every");
   // biweekly via the French word "deux": "tous les deux jours" -> "every 2 days"
   s = s.replace(/\bevery\s+deux\b/gi, "every 2");
+  // calendar-period aliases: map straight onto the "N months" machinery.
+  s = s.replace(/\btrimestres?\b/gi, "3 months");
+  s = s.replace(/\bsemestres?\b/gi, "6 months");
   s = s.replace(/\bjour\s+ouvr[eé]s\b/gi, "weekday");
   s = s.replace(/\bjours\s+ouvr[eé]s\b/gi, "weekday");
   s = s.replace(/\bjours\b/gi, "days");
@@ -211,6 +238,11 @@ export function frToEnRule(frRule: string): string {
     s = s.replace(new RegExp(`\\bde\\s+${frM}\\s+et\\s+`, "gi"), `of ${enM} and `);
   }
 
+  // month exclusion: "en août" -> "in august" (used by "sauf en <mois>")
+  for (const [frM, enM] of MONTH_MAP) {
+    s = s.replace(new RegExp(`\\ben\\s+${frM}\\b`, "gi"), `in ${enM}`);
+  }
+
   // ensure "every year on the <ordinal> <weekday> of <month>"
   s = s.replace(
     /\bevery\s+year\s+on\s+(first|second|third|fourth|fifth|last)\b/gi,
@@ -235,6 +267,9 @@ export function frToEnRule(frRule: string): string {
     "the $1 $2 of the month",
   );
 
+  // day-of-month exclusion: "le 15 du mois" -> "the 15th of the month"
+  s = s.replace(/\ble\s+(\d{1,2})\s+du\s+month\b/gi, "the $1th of the month");
+
   // normalize commas
   s = s.replace(/\s*,\s*/g, ", ");
   s = normSpaces(s);
@@ -246,17 +281,25 @@ export function frToEnRule(frRule: string): string {
     "$1 every $2 $3 between",
   );
 
-  // - "every month le X ..." -> "every month on the X ..."
-  s = s.replace(/\bevery\s+month\s+le\b/gi, "every month on the");
+  // - "every [N] month(s) le X ..." -> "every [N] month on the X ..."
+  // (the optional interval supports "every 2 months le 1st ...")
+  s = s.replace(/\bevery\s+(\d+\s+)?months?\s+le\b/gi, "every $1month on the");
 
-  // ensure "every month" has "on the"
-  s = s.replace(/^(every\s+month)\s+(?!on\b)/i, "$1 on the ");
+  // ensure "every [N] month(s)" has "on the" — only when a day spec follows
+  // (a number, an ordinal, or "last day"), never before at/between/until.
+  s = s.replace(
+    /^(every\s+(?:\d+\s+)?months?)\s+(?=\d|first|second|third|fourth|fifth|last\b)/i,
+    "$1 on the ",
+  );
 
-  // yearly forms:
-  s = s.replace(/\bevery\s+year\s+le\b/gi, "every year on");
+  // yearly forms (interval-tolerant):
+  s = s.replace(/\bevery\s+(\d+\s+)?years?\s+le\b/gi, "every $1year on");
 
-  // "every year le 03-12 a 12:30" -> "every year on 03-12 at 12:30"
-  s = s.replace(/^(every\s+year)\s+le\s+(\d{2}-\d{2})\s+a\s+(\d{2}:\d{2})$/i, "$1 on $2 at $3");
+  // "every [N] year le 03-12 a 12:30" -> "every [N] year on 03-12 at 12:30"
+  s = s.replace(
+    /^(every\s+(?:\d+\s+)?years?)\s+le\s+(\d{2}-\d{2})\s+a\s+(\d{2}:\d{2})$/i,
+    "$1 on $2 at $3",
+  );
 
   // one-shot: "le 2026-03-13 a 02:00" -> "2026-03-13 at 02:00"
   s = s.replace(/^le\s+(\d{4}-\d{2}-\d{2})\s+a\s+(\d{2}:\d{2})$/i, "$1 at $2");
@@ -266,6 +309,12 @@ export function frToEnRule(frRule: string): string {
 
   // one-shot: remove leading "le" even inside composed schedules
   s = s.replace(/\ble\s+(\d{4}-\d{2}-\d{2})\s+at\s+(\d{2}:\d{2})\b/gi, "$1 at $2");
+
+  // "du lundi au vendredi" (weekdays already in English) -> "every monday to friday"
+  s = s.replace(
+    /^du\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+au\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+    "every $1 to $2",
+  );
 
   // "le monday" after conversions: remove "le" when it remains
   s = s.replace(/\ble\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi, "$1");
